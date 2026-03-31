@@ -1,22 +1,22 @@
 import logging
-from openai import AsyncOpenAI
+import google.generativeai as genai
 from config import config
 
 logger = logging.getLogger(__name__)
 
-# Ленивая инициализация — клиент создаётся при первом вызове
-_client: AsyncOpenAI | None = None
+_model = None
 
 
-def _get_client() -> AsyncOpenAI:
-    global _client
-    if _client is None:
-        _client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
-    return _client
+def _get_model():
+    global _model
+    if _model is None:
+        genai.configure(api_key=config.GEMINI_API_KEY)
+        _model = genai.GenerativeModel("gemini-1.5-flash")
+    return _model
 
 
 async def generate_birthday_message(name: str, username: str, age: int | None = None) -> str:
-    """Генерируем красивое поздравление через GPT."""
+    """Генерируем красивое поздравление через Gemini."""
     age_part = f", ему/ей исполняется {age} лет" if age else ""
 
     prompt = (
@@ -30,16 +30,16 @@ async def generate_birthday_message(name: str, username: str, age: int | None = 
     )
 
     try:
-        response = await _get_client().chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=300,
-            temperature=0.9,
+        response = await _get_model().generate_content_async(
+            prompt,
+            generation_config=genai.GenerationConfig(
+                max_output_tokens=300,
+                temperature=0.9,
+            ),
         )
-        return response.choices[0].message.content.strip()
+        return response.text.strip()
     except Exception as e:
-        logger.error(f"OpenAI error: {e}")
-        # Fallback если API недоступен
+        logger.error(f"Gemini error: {e}")
         return (
             f"🎂 В этот прекрасный день поздравляем @{username} {name} с днём рождения! "
             f"Желаем счастья, здоровья и всего самого лучшего! 🎉"
